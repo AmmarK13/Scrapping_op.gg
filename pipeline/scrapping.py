@@ -58,60 +58,105 @@ class Team():
         except Exception as e:
             print(f"❌ Could not find detail buttons at all: {e}")
 
-    def get_champions(self):
+    def extract_games_from_table(self):
         try:
             WebDriverWait(self.driver, 30).until(
-                EC.presence_of_all_elements_located((By.XPATH, "//a[contains(@href,'/lol/champions/') and contains(@href,'/build')]"))
+                EC.presence_of_all_elements_located((By.XPATH, "//tr[@class='!border-b-0']"))
             )
-            anchor_tags = self.driver.find_elements(By.XPATH, "//a[contains(@href,'/lol/champions/')]")
-            href_tags = [tag.get_attribute("href") for tag in anchor_tags][5:]
+            table_rows = self.driver.find_elements(By.XPATH, "//tr[@class='!border-b-0']")
 
+            print(f"✅ Found {len(table_rows)} rows (expecting ~200 for 20 games)")
 
-            print("\n🌐 Champion HREFs:")
-            for i, href in enumerate(href_tags):
-                print(f"{i+1}. {href}")
+            all_games = {}
 
-            return href_tags
+            for i in range(0, len(table_rows), 10):
+                chunk = table_rows[i:i+10]
+                game_index = i // 10 + 1
+                game_key = f"game_{game_index}"
+
+                blue_team = []
+                red_team = []
+
+                # 🟦 Blue Team
+                for row in chunk[:5]:
+                    champ_data = {"champion": "unknown", "summoners": []}
+                    try:
+                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", row)
+                        time.sleep(0.2)
+
+                        champ_link = row.find_element(By.XPATH, ".//a[contains(@href,'/lol/champions/') and contains(@href,'/build')]")
+                        href = champ_link.get_attribute("href")
+                        champ_name = href.split("/lol/champions/")[1].split("/")[0]
+                        champ_data["champion"] = champ_name
+
+                        spell_imgs = row.find_elements(By.XPATH, ".//img[contains(@src, '/spell/Summoner')]")
+                        for img in spell_imgs:
+                            src = img.get_attribute("src")
+                            spell_name = src.split("/")[-1].split(".")[0]
+                            champ_data["summoners"].append(spell_name)
+                        runes_imgs=row.find_elements(By.XPATH,".//img[contains(@src,'/perk/')]")
+                        for img in runes_imgs:
+                            alt =img.get_attribute("alt")
+                            champ_data["Runes"].append(alt)
+                    except Exception as e:
+                        print(f"⚠️ Blue team row failed: {e}")
+                        pass
+
+                    blue_team.append(champ_data)
+
+                # 🔴 Red Team
+                for row in chunk[5:10]:
+                    champ_data = {"champion": "unknown", "summoners": []}
+                    try:
+                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", row)
+                        time.sleep(0.2)
+
+                        champ_link = row.find_element(By.XPATH, ".//a[contains(@href,'/lol/champions/') and contains(@href,'/build')]")
+                        href = champ_link.get_attribute("href")
+                        champ_name = href.split("/lol/champions/")[1].split("/")[0]
+                        champ_data["champion"] = champ_name
+
+                        spell_imgs = row.find_elements(By.XPATH, ".//img[contains(@src, '/spell/Summoner')]")
+                        for img in spell_imgs:
+                            src = img.get_attribute("src")
+                            spell_name = src.split("/")[-1].split(".")[0]
+                            champ_data["summoners"].append(spell_name)
+                        runes_imgs=row.find_elements(By.XPATH,".//img[contains(@src,'/perk/')]")
+                        for img in runes_imgs:
+                            alt =img.get_attribute("alt")
+                            champ_data["Runes"].append(alt)
+                    except Exception as e:
+                        print(f"⚠️ Red team row failed: {e}")
+                        pass
+
+                    red_team.append(champ_data)
+
+                all_games[game_key] = {
+                    "blue": blue_team,
+                    "red": red_team
+                }
+
+            return all_games
+
         except Exception as e:
-            print("❌ Champion links NOT FOUND")
+            print("❌ Could not extract table rows.")
             print("Error:", e)
-    
-    def clean_href(self, href_array):
-        cleaned_hrefs = []
-
-        for i in range(0, len(href_array), 11):
-            chunk = href_array[i:i+11]
-            unique_chunk = []
-            seen = set()
-
-            for href in chunk:
-                # Extract champion name
-                try:
-                    champion_name = href.split("/lol/champions/")[1].split("/")[0]
-                except IndexError:
-                    print(f"⚠️ Skipping malformed href: {href}")
-                    continue
-
-                if champion_name not in seen:
-                    seen.add(champion_name)
-                    unique_chunk.append(champion_name)
-                else:
-                    print(f"🗑️ Removed duplicate in group: {champion_name}")
-
-            cleaned_hrefs.extend(unique_chunk)
-
-        return cleaned_hrefs
+            return {}
 
 
-    def make_game_champion_map(self, href_array):
-        game_map = {}
+                
 
-        for i in range(0, len(href_array), 10):  
-            chunk = href_array[i:i+10]
-            game_key = f"game_{i // 10 + 1}"
-            game_map[game_key] = chunk
 
-        return game_map
+    def print_games(self, games):
+        for game_number, teams in games.items():
+            print(f"\n🎮 {game_number}")
+            print("  🔵 Blue Team:")
+            for champ in teams['blue']:
+                print(f"     - {champ}")
+            print("  🔴 Red Team:")
+            for champ in teams['red']:
+                print(f"     - {champ}")
+
 
 
                 
@@ -119,17 +164,11 @@ class Team():
 
     def pipeline(self):
         self.open_website()
-        self.get_match_history()
         self.open_more_details()
-        href_array=self.get_champions()
-        cleaned_href=self.clean_href(href_array)
-        game_map=self.make_game_champion_map(cleaned_href)
+        all_games=self.extract_games_from_table()
+        self.print_games(all_games)
 
 
-        for game, champions in game_map.items():
-            print(f"{game}:")
-            for champ in champions:
-                print(f"  - {champ}")
 
 
 
