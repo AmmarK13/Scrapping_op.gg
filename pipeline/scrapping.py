@@ -112,6 +112,28 @@ class Team():
                 print(f"⚠️ Error while detecting team: {e}")
 
         return blue_rows, red_rows
+    
+    def click_update(self):
+        try:
+            WebDriverWait(self.driver, 30).until(
+                EC.presence_of_element_located(
+                    (By.XPATH, "//button[contains(@class,'bg-main-500') and contains(@class, 'hover:bg-main-600')]")
+                )
+            )
+
+            update_button = self.driver.find_element(
+                By.XPATH, "//button[contains(@class,'bg-main-500') and contains(@class, 'hover:bg-main-600')]"
+            )
+            span = update_button.find_element(By.TAG_NAME, "span")
+            print("🖋️ Button Text:", span.text)
+
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", update_button)
+            self.driver.execute_script("arguments[0].click();", update_button)
+            time.sleep(30)
+
+        except Exception as e:
+            print(f"❌ Failed to click update button: {e}")
+
 
 
 
@@ -211,11 +233,13 @@ class Team():
 
     def pipeline(self):
         self.open_website()
+        self.click_update()
+        time.sleep(20)
         self.open_more_details()
-        all_games = self.extract_games_from_table()
+        all_games=self.extract_games_from_table()
         self.print_games(all_games)
         self.write_games_to_csv(all_games)
-
+       
 
 if __name__ == "__main__":
     scraper = Team()
